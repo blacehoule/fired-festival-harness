@@ -21,10 +21,19 @@ from textual_serve.server import Server
 
 def main() -> None:
     port = int(os.environ.get("PORT", "8000"))
+    # Behind a TLS proxy (render), the browser loads the page over https but
+    # textual-serve would otherwise hand it a ws://0.0.0.0:$PORT websocket URL
+    # built from host/port — unreachable and mixed-content blocked, so the app
+    # hangs on the loading screen. render publishes the real external URL as
+    # RENDER_EXTERNAL_URL; passing it makes the websocket wss://<host>/ws.
+    # Unset locally → None → textual-serve falls back to host:port (fine for dev).
+    public_url = os.environ.get("RENDER_EXTERNAL_URL")
     # Use this interpreter so the spawned app inherits the same environment
     # (installed deps, env vars) regardless of how PATH is set up.
     command = f"{sys.executable} main.py"
-    server = Server(command, host="0.0.0.0", port=port, title="QuizCat")
+    server = Server(
+        command, host="0.0.0.0", port=port, title="QuizCat", public_url=public_url
+    )
     server.serve()
 
 
