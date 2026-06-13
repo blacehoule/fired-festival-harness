@@ -1,0 +1,17 @@
+# render.com Blueprint. Point a new Blueprint at this repo (or create a
+# Web Service from the Dockerfile) and it deploys with no extra config.
+services:
+  - type: web
+    name: quizcat
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    # render sets $PORT; serve.py binds to it. healthCheckPath hits the page
+    # textual-serve serves at "/".
+    healthCheckPath: /
+    envVars:
+      # Optional: only needed for the in-app "generate test" (AI) feature.
+      # Set the value in the render dashboard; the static question bank works
+      # without it.
+      - key: OPENAI_API_KEY
+        sync: false

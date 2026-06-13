@@ -1,0 +1,10 @@
+# Keep the build context small and never ship local state or secrets.
+.git
+.venv
+__pycache__/
+*.py[oc]
+var/
+.env
+tests/
+*.pdf
+*.ipynb
