@@ -1,5 +1,72 @@
 # QuizCat Terminal User Interface
 
+QuizCat is a [Textual](https://textual.textualize.io/) terminal UI for timed,
+CCAT-style multiple-choice practice tests. Pick an exam from the dashboard, work
+through it against a 15-minute clock, and get scored on submission. It ships with
+a 400-question bank (see below) and can also **generate fresh exams on demand**
+using an agentic LLM harness.
+
+## Running it
+
+Dependencies are managed by [uv](https://docs.astral.sh/uv/) and the project
+targets Python 3.14+.
+
+```bash
+uv sync
+uv run python main.py          # run the TUI in your terminal
+uv run python serve.py         # serve it in a browser at http://localhost:8000
+```
+
+The browser build (`serve.py`) uses
+[`textual-serve`](https://github.com/Textualize/textual-serve) to stream the
+real terminal app to a web page, which is how it's deployed. See
+[`DEPLOY.md`](DEPLOY.md) for the Docker + render.com walkthrough.
+
+## Test generation harness
+
+The "generate test" feature is powered by an agentic harness
+(`harness.py`, exposed to the UI through `services.py`). A worker LLM drafts one
+question at a time while the harness governs the loop around it — validation,
+revision, persistence, and observability — so generated questions are
+answerable, correctly solved, properly categorized, and traceable from draft to
+acceptance. `HARNESS.md` is the design spec; the implemented harness demonstrates
+four hackathon components directly in-product:
+
+* **Main loop** — `run_generation()` walks a fixed question-type distribution
+  (`GenerationRequest`, default 6 few-shot examples per type, up to 3 attempts
+  each), generating and validating one question per slot until the requested set
+  is accepted.
+* **Tool calling** — math-like question types route through a
+  calculator-enabled generation **and** verification path
+  (`ChatClient.complete_with_tools`). The worker must check every non-trivial
+  arithmetic step with a pure, no-network `calculate` tool before committing to
+  an answer; non-math types use the standard path. Every tool invocation is
+  captured as a `ToolCallRecord`.
+* **Guardrails & checkpoints** — `validate_draft()` rejects structurally
+  malformed questions (missing fields, no correct choice, off-taxonomy), and a
+  strict math **verifier** re-solves each math question and retries on
+  failed/warning verdicts (`VerificationResult`) up to `max_attempts`.
+* **Observability** — every attempt yields a `HarnessQuestionTrace` (raw output,
+  tool calls, verifier verdict, guardrail errors, repair attempts) and each run
+  yields a `HarnessRunSummary`; both are persisted so generated exams can be
+  inspected after the fact.
+
+Few-shot examples are drawn from the seed question bank, so generated questions
+match the style and taxonomy of the real CCAT items without copying them.
+
+### Model boundary
+
+Only the `ChatClient` boundary touches the network — the calculator, parsing,
+and guardrail logic are pure and unit-testable without an API key (the tests
+inject a scripted client to drive the loop deterministically). The default
+client (`create_chat_client()`) is OpenAI-backed via LangChain's `ChatOpenAI`,
+and the worker is **swappable** behind the `ChatClient` protocol. Configure it
+with environment variables:
+
+* `OPENAI_API_KEY` — **required** to generate tests (locally via `.env`, or as a
+  service env var in deployment). The bundled question bank works without it.
+* `OPENAI_MODEL` — model id, default `gpt-4o-mini`.
+* `OPENAI_TEMPERATURE` — sampling temperature, default `0.2`.
 
 ## CCAT Question Bank Dataset Context
 
